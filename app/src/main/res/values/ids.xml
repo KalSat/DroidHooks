@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    // main
+    <item name="container" type="id" />
+    <item name="btn_add" type="id" />
+</resources>

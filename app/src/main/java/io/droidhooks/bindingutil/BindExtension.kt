@@ -6,6 +6,8 @@ import android.arch.lifecycle.Observer
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import org.jetbrains.anko.sdk27.coroutines.onAttachStateChangeListener
+import kotlin.reflect.KFunction1
 import kotlin.reflect.KMutableProperty0
 
 fun <T> LiveData<T>.observe(owner: LifecycleOwner, onChanged: (T?) -> Unit) {
@@ -13,34 +15,34 @@ fun <T> LiveData<T>.observe(owner: LifecycleOwner, onChanged: (T?) -> Unit) {
 }
 
 
-fun <T : Any, U : T> bind(lifecycleOwner: LifecycleOwner, setter: (T) -> Unit,
+fun <T : Any, U : T> bind(owner: LifecycleOwner, setter: (T) -> Unit,
                           field: NonNullLiveData<U>) =
-        field.observe(lifecycleOwner) { setter(it) }
+        field.observe(owner) { setter(it) }
 
-fun <T : Any, U : Any> bind(lifecycleOwner: LifecycleOwner, setter: (T) -> Unit,
+fun <T : Any, U : Any> bind(owner: LifecycleOwner, setter: (T) -> Unit,
                             field: NonNullLiveData<U>, converter: (U) -> T) =
-        field.observe(lifecycleOwner) { setter(converter(it)) }
+        field.observe(owner) { setter(converter(it)) }
 
-fun <T : Any, U : T> bind(lifecycleOwner: LifecycleOwner, prop: KMutableProperty0<T>,
+fun <T : Any, U : T> bind(owner: LifecycleOwner, prop: KMutableProperty0<T>,
                           field: NonNullLiveData<U>) =
-        field.observe(lifecycleOwner) { prop.set(it) }
+        field.observe(owner) { prop.set(it) }
 
-fun <T : Any, U : Any> bind(lifecycleOwner: LifecycleOwner, prop: KMutableProperty0<T>,
+fun <T : Any, U : Any> bind(owner: LifecycleOwner, prop: KMutableProperty0<T>,
                             field: NonNullLiveData<U>, converter: (U) -> T) =
-        field.observe(lifecycleOwner) { prop.set(converter(it)) }
+        field.observe(owner) { prop.set(converter(it)) }
 
 
-inline fun <T : View> T.bindIf(lifecycleOwner: LifecycleOwner, data: NonNullLiveData<Boolean>): T {
-    data.observe(lifecycleOwner) { this.visibility = if (data.value) View.VISIBLE else View.GONE }
+fun <T : View> T.bindIf(owner: LifecycleOwner, data: NonNullLiveData<Boolean>): T {
+    bind(owner, this::setVisibility, data) { if (it) View.VISIBLE else View.GONE }
     return this
 }
 
-inline fun <T : View> T.bindShow(lifecycleOwner: LifecycleOwner, data: NonNullLiveData<Boolean>): T {
-    data.observe(lifecycleOwner) { this.visibility = if (data.value) View.VISIBLE else View.INVISIBLE }
+fun <T : View> T.bindShow(owner: LifecycleOwner, data: NonNullLiveData<Boolean>): T {
+    bind(owner, this::setVisibility, data) { if (it) View.VISIBLE else View.INVISIBLE }
     return this
 }
 
-inline fun <T : ViewGroup> T.addChildren(vararg children: View) {
+fun <T : ViewGroup> T.addChildren(vararg children: View) {
     for (child in children) {
         addView(child)
     }
@@ -53,4 +55,22 @@ fun EditText.setTextSafely(text: CharSequence?) {
     }
 
     this.setText(text)
+}
+
+// hooks
+fun <T> useState(initialValue: T): Pair<NonNullLiveData<T>, KFunction1<T, Unit>> {
+    val state = NonNullLiveData(initialValue)
+    return Pair(state, state::postValue)
+}
+
+fun <T : View> T.useEffect(create: () -> (() -> Unit)?) {
+    onAttachStateChangeListener {
+        var destroy: (() -> Unit)? = null
+        onViewAttachedToWindow {
+            destroy = create()
+        }
+        onViewDetachedFromWindow {
+            destroy?.invoke()
+        }
+    }
 }
